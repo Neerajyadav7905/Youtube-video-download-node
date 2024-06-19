@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download YouTube Video</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f7f7f7;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #333;
+    }
+
+    .container {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+    }
+
+    input[type="text"] {
+      width: calc(100% - 22px);
+      padding: 10px;
+      margin-bottom: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      background-color: #007BFF;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    #info-container {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background: #f9f9f9;
+      overflow:auto;
+      height:60vh;
+    }
+
+    #info-container ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    #info-container li {
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #info-container li button {
+      padding: 5px 10px;
+      background-color: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      max-width: 200px;
+    }
+
+    #info-container li button:hover {
+      background-color: #218838;
+    }
+
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-radius: 50%;
+      border-top: 4px solid #3498db;
+      width: 30px;
+      height: 30px;
+      animation: spin 2s linear infinite;
+      margin: 30px auto;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #progress {
+      display: none;
+      margin-top: 1rem;
+    }
+  </style>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Download YouTube Video</h1>
+    <label for="url">Enter YouTube Video URL:</label>
+    <input type="text" name="url" id="url" placeholder="YouTube Video URL">
+    <button type="submit" onclick="getinfo();">Fetch Info</button>
+    <div class="loader" id="loader"></div>
+    <div id="info-container"></div>
+    <div id="progress"></div>
+  </div>
+  <script>
+    function isValidUrlRegex(url) {
+      const urlPattern = /^(http|https|ftp):\/\/[^\s\/$.?#]*\.[^\s]*$/i;
+      return urlPattern.test(url);
+    }
+
+    function getinfo() {
+      let url = $('#url').val();
+      if (url && isValidUrlRegex(url)) {
+        $('#loader').show();
+        $.ajax({
+          url: '/get-video-info',
+          type: 'GET',
+          data: { url: url },
+          success: function (data) {
+            $('#loader').hide();
+            if (data && data.quality.length > 0) {
+              let html = `<p id="vidtitle">${data.videoDetails.title}</p>`;
+              html += `<ul>`;
+              for (const q of data.quality) {
+                html += `<li>${q.quality}(${q.ratio}) ${q.fileSize} <button onclick="vid_download('${data.videoDetails.url}','${q.itag}');">Download</button></li>`;
+              }
+              html += `</ul>`;
+              $('#info-container').html(html);
+              $('#info-container').css({'display':'block'});
+            }
+          },
+          error: function() {
+            $('#loader').hide();
+            alert('Error fetching video info.');
+          }
+        });
+      } else {
+        alert('Please enter a valid URL.');
+      }
+    }
+
+    function formatBytes(bytes, decimals = 2) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const dm = decimals < 0 ? 0 : decimals;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    async function vid_download(url, itag) {
+      const response = await fetch(`/download?url=${url}&itag=${itag}`);
+      const contentLength = response.headers.get('content-length');
+      const reader = response.body.getReader();
+      let receivedLength = 0; // Received that many bytes at the moment
+      const chunks = []; // Array of received binary chunks (comprises the body)
+
+      while(true) {
+        const {done, value} = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        chunks.push(value);
+        receivedLength += value.length;
+
+        const percentage = ((receivedLength / contentLength) * 100).toFixed(2);
+        const formattedReceivedLength = formatBytes(receivedLength);
+        const formattedContentLength = formatBytes(contentLength);
+
+        document.getElementById('progress').innerText = `Downloaded: ${formattedReceivedLength} / ${formattedContentLength} (${percentage}%)`;
+        document.getElementById('progress').style.display = 'block';
+      }
+
+      // Concatenate chunks into a single Blob
+      const blob = new Blob(chunks);
+
+      const title = document.getElementById('vidtitle').textContent;
+      const filename = `${title}.mp4`;
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+    }
+  </script>
+</body>
+</html>
