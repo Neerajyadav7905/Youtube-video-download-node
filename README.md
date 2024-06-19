@@ -43,7 +43,7 @@ Follow these steps to set up the project on your local machine:
 
 1. Open your web browser.
 2. Go to `http://localhost:3000`.
-3. Enter the URL and video information in the provided fields.
+3. Enter the Youtube URL in the provided fields.
 4. The download links will be displayed on the webpage.
 
 ## License
